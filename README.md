@@ -10,6 +10,7 @@ REST API для управления организационной структ
 
 ## Содержание
 
+- [Сборка и запуск проекта](#сборка-и-запуск-проекта)
 - [Быстрый старт](#быстрый-старт)
 - [Стек технологий](#стек-технологий)
 - [Структура проекта](#структура-проекта)
@@ -24,49 +25,169 @@ REST API для управления организационной структ
 
 ---
 
-## Быстрый старт
+## Сборка и запуск проекта
 
-### Требования
+Пошаговая инструкция: от клонирования до работающего API с данными в БД.
 
-- Docker и Docker Compose
-- (опционально) Python 3.12+ — для локального запуска и тестов
+### 1. Требования
 
-### Запуск
+| Компонент | Версия | Зачем |
+|-----------|--------|--------|
+| **Docker** | 20+ | Сборка и запуск API + PostgreSQL |
+| **Docker Compose** | v2+ | Оркестрация сервисов `db` и `api` |
+| **Git** | любая | Клонирование репозитория |
+| **Python** | 3.12+ | Опционально: тесты и локальный запуск без Docker |
+
+Если при `docker compose` ошибка `permission denied`:
 
 ```bash
+sudo usermod -aG docker $USER
+newgrp docker   # или перелогиньтесь
+```
+
+### 2. Клонирование
+
+```bash
+git clone git@github.com:Vitaly3278/hitalent.git
 cd hitalent
+```
+
+### 3. Сборка и запуск (Docker) — рекомендуемый способ
+
+```bash
+# Собрать образ API и поднять PostgreSQL + API
 docker compose up --build
 ```
 
-При старте контейнера `api` автоматически выполняются миграции (`alembic upgrade head`), затем запускается сервер.
+Что происходит при старте:
 
-### Полезные URL
+1. Поднимается **PostgreSQL** (`hitalent-db-1`, порт `5432`).
+2. Собирается образ **API** из `Dockerfile` (Python 3.12, зависимости из `requirements.txt`).
+3. В контейнере `api` выполняется `entrypoint.sh`:
+   - `alembic upgrade head` — миграции БД;
+   - `uvicorn app.main:app` — HTTP-сервер на порту `8000`.
 
-| URL | Описание |
-|-----|----------|
-| http://localhost:8000/ | Краткое описание API и список эндпоинтов |
-| http://localhost:8000/docs | Swagger UI — интерактивная документация |
-| http://localhost:8000/redoc | ReDoc — альтернативная документация |
-| http://localhost:8000/health | Проверка работоспособности |
+Запуск в фоне:
 
-Проверка:
+```bash
+docker compose up --build -d
+docker compose ps          # статус контейнеров
+docker compose logs -f api # логи API
+```
+
+### 4. Проверка, что всё работает
 
 ```bash
 curl http://localhost:8000/health
 # {"status":"ok"}
+
+curl http://localhost:8000/
+# описание API и список эндпоинтов
 ```
 
-Остановка:
+В браузере:
+
+| URL | Назначение |
+|-----|------------|
+| http://localhost:8000/docs | Swagger — вызов API из UI |
+| http://localhost:8000/redoc | Документация ReDoc |
+| http://localhost:8000/health | Healthcheck |
+
+### 5. Тестовые данные в БД
 
 ```bash
+# первый запуск — создать 6 подразделений и 8 сотрудников
+docker compose exec api python scripts/seed.py
+
+# если данные уже есть — пересоздать
+docker compose exec api python scripts/seed.py --force
+```
+
+Проверка дерева подразделений:
+
+```bash
+curl "http://localhost:8000/departments/1?depth=3"
+```
+
+Ожидаемый корень: **«Компания»** → дочерние «Разработка», «Продажи», «HR» и вложенные «Backend» / «Frontend».
+
+### 6. Автотесты
+
+Нужен запущенный PostgreSQL (достаточно сервиса `db`):
+
+```bash
+docker compose up db -d
+
+# в отдельном терминале, из корня проекта
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pytest -v
+```
+
+Тесты используют БД `hitalent_test` (создаётся автоматически).
+
+### 7. Остановка и очистка
+
+```bash
+# остановить контейнеры
 docker compose down
-```
 
-Удаление данных БД (volume):
-
-```bash
+# остановить и удалить данные PostgreSQL (volume)
 docker compose down -v
 ```
+
+### 8. Локальный запуск без Docker (разработка)
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# только БД в Docker
+docker compose up db -d
+
+export DATABASE_URL=postgresql://postgres:postgres@localhost:5432/hitalent
+alembic upgrade head
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Тестовые данные локально:
+
+```bash
+PYTHONPATH=. python scripts/seed.py --force
+```
+
+Подробнее о переменных окружения и миграциях — в разделах ниже.
+
+### Схема запуска
+
+```
+git clone → docker compose up --build
+                │
+                ├─ db (PostgreSQL :5432)
+                │
+                └─ api → alembic upgrade → uvicorn :8000
+                              │
+                    docker compose exec api python scripts/seed.py
+                              │
+                    curl /departments/1?depth=3
+```
+
+---
+
+## Быстрый старт
+
+Кратко, если проект уже настроен:
+
+```bash
+git clone git@github.com:Vitaly3278/hitalent.git && cd hitalent
+docker compose up --build -d
+docker compose exec api python scripts/seed.py --force
+curl http://localhost:8000/health
+```
+
+Откройте http://localhost:8000/docs
 
 ---
 
