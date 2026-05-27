@@ -3,22 +3,36 @@ from collections.abc import Generator
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine.url import make_url
 from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
 from app.main import app
 
-TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL", "sqlite:///:memory:")
+DEFAULT_TEST_DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/hitalent_test"
+TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL", DEFAULT_TEST_DATABASE_URL)
 
-_engine_kwargs: dict = {"pool_pre_ping": True}
-if TEST_DATABASE_URL.startswith("sqlite"):
-    _engine_kwargs["connect_args"] = {"check_same_thread": False}
-    if TEST_DATABASE_URL.endswith(":memory:"):
-        _engine_kwargs["poolclass"] = StaticPool
 
-engine = create_engine(TEST_DATABASE_URL, **_engine_kwargs)
+def _ensure_postgres_database(database_url: str) -> None:
+    url = make_url(database_url)
+    if url.drivername.startswith("postgresql") and url.database:
+        admin_url = url.set(database="postgres")
+        admin_engine = create_engine(admin_url, isolation_level="AUTOCOMMIT")
+        with admin_engine.connect() as connection:
+            exists = connection.execute(
+                text("SELECT 1 FROM pg_database WHERE datname = :name"),
+                {"name": url.database},
+            ).scalar()
+            if not exists:
+                connection.execute(text(f'CREATE DATABASE "{url.database}"'))
+        admin_engine.dispose()
+
+
+if TEST_DATABASE_URL.startswith("postgresql"):
+    _ensure_postgres_database(TEST_DATABASE_URL)
+
+engine = create_engine(TEST_DATABASE_URL, pool_pre_ping=True)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 

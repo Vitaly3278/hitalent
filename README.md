@@ -416,18 +416,25 @@ alembic upgrade head
 
 ## Тесты
 
-По умолчанию тесты используют **SQLite в памяти** — дополнительная БД не нужна:
+По ТЗ используется **PostgreSQL**. Тесты по умолчанию подключаются к отдельной БД `hitalent_test` (создаётся автоматически при первом запуске).
 
 ```bash
+# поднять PostgreSQL
+docker compose up db -d
+
 pip install -r requirements.txt
 pytest -v
 ```
 
-Запуск против PostgreSQL:
+Строка подключения по умолчанию:
+
+```text
+postgresql://postgres:postgres@localhost:5432/hitalent_test
+```
+
+Переопределение (опционально):
 
 ```bash
-docker compose up db -d
-docker compose exec db psql -U postgres -c "CREATE DATABASE hitalent_test;"
 export TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/hitalent_test
 pytest -v
 ```
