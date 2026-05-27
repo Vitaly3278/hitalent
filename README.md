@@ -4,6 +4,8 @@ REST API для управления организационной структ
 
 Реализация тестового задания: FastAPI, PostgreSQL, SQLAlchemy, Alembic, Docker Compose.
 
+![Корневой эндпоинт API](screen.png)
+
 ---
 
 ## Содержание
