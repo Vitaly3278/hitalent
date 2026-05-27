@@ -21,7 +21,7 @@ class DepartmentService:
     def get_department_or_404(self, department_id: int) -> Department:
         department = self.db.get(Department, department_id)
         if department is None:
-            raise NotFoundError("Department not found")
+            raise NotFoundError("Подразделение не найдено")
         return department
 
     def _ensure_unique_name(self, name: str, parent_id: int | None, exclude_id: int | None = None) -> None:
@@ -32,11 +32,11 @@ class DepartmentService:
         if exclude_id is not None:
             query = query.where(Department.id != exclude_id)
         if self.db.scalar(query) is not None:
-            raise ConflictError("Department name must be unique within the same parent")
+            raise ConflictError("Название подразделения должно быть уникальным в рамках одного родителя")
 
     def _ensure_parent_exists(self, parent_id: int | None) -> None:
         if parent_id is not None and self.db.get(Department, parent_id) is None:
-            raise NotFoundError("Parent department not found")
+            raise NotFoundError("Родительское подразделение не найдено")
 
     def _collect_descendant_ids(self, department_id: int) -> set[int]:
         descendants: set[int] = set()
@@ -56,10 +56,10 @@ class DepartmentService:
         if new_parent_id is None:
             return
         if new_parent_id == department_id:
-            raise ConflictError("Department cannot be its own parent")
+            raise ConflictError("Подразделение не может быть родителем самого себя")
         descendants = self._collect_descendant_ids(department_id)
         if new_parent_id in descendants:
-            raise ConflictError("Cannot move department into its own subtree")
+            raise ConflictError("Нельзя переместить подразделение внутрь своего поддерева")
 
     def create_department(self, data: DepartmentCreate) -> DepartmentRead:
         self._ensure_parent_exists(data.parent_id)
@@ -95,7 +95,7 @@ class DepartmentService:
     def _load_department(self, department_id: int) -> Department:
         department = self.db.get(Department, department_id)
         if department is None:
-            raise NotFoundError("Department not found")
+            raise NotFoundError("Подразделение не найдено")
         return department
 
     def _load_children_by_parent_ids(self, parent_ids: list[int]) -> list[Department]:
@@ -156,7 +156,7 @@ class DepartmentService:
         if include_employees:
             employees = [EmployeeRead.model_validate(e) for e in self._get_department_employees(department_id)]
 
-        children = self._build_children_tree([department_id], depth - 1, include_employees)
+        children = self._build_children_tree([department_id], depth, include_employees)
 
         return DepartmentDetail(
             department=DepartmentRead.model_validate(department),
@@ -200,9 +200,13 @@ class DepartmentService:
 
         if mode == "reassign":
             if reassign_to_department_id is None:
-                raise BadRequestError("reassign_to_department_id is required when mode=reassign")
+                raise BadRequestError(
+                    "Параметр reassign_to_department_id обязателен при mode=reassign"
+                )
             if reassign_to_department_id == department_id:
-                raise BadRequestError("Cannot reassign employees to the department being deleted")
+                raise BadRequestError(
+                    "Нельзя переводить сотрудников в удаляемое подразделение"
+                )
             target = self.get_department_or_404(reassign_to_department_id)
             employees = self.db.scalars(
                 select(Employee).where(Employee.department_id == department_id)
@@ -225,4 +229,4 @@ class DepartmentService:
             self.db.commit()
             return
 
-        raise BadRequestError("mode must be 'cascade' or 'reassign'")
+        raise BadRequestError("Параметр mode должен быть cascade или reassign")

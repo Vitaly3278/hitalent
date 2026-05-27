@@ -40,8 +40,13 @@ def create_employee(
 @router.get("/{department_id}", response_model=DepartmentDetail)
 def get_department(
     department_id: int,
-    depth: int = Query(default=1, ge=1, le=5),
-    include_employees: bool = Query(default=True),
+    depth: int = Query(
+        default=1,
+        ge=1,
+        le=5,
+        description="Число уровней вложенных подразделений в поле children (1 — только прямые дочерние)",
+    ),
+    include_employees: bool = Query(default=True, description="Включать списки сотрудников"),
     service: DepartmentService = Depends(get_department_service),
 ) -> DepartmentDetail:
     return service.get_department_detail(department_id, depth, include_employees)

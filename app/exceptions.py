@@ -6,7 +6,7 @@ class AppError(Exception):
 
 
 class NotFoundError(AppError):
-    def __init__(self, message: str = "Resource not found") -> None:
+    def __init__(self, message: str = "Ресурс не найден") -> None:
         super().__init__(message, 404)
 
 
