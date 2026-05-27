@@ -79,7 +79,7 @@ docker compose logs -f api # логи API
 
 ```bash
 curl http://localhost:8000/health
-# {"status":"ok"}
+# {"status":"ok","database":"ok"}
 
 curl http://localhost:8000/
 # описание API и список эндпоинтов
@@ -125,7 +125,7 @@ pip install -r requirements.txt
 pytest -v
 ```
 
-Тесты используют БД `hitalent_test` (создаётся автоматически).
+Тесты используют БД `hitalent_test` (создаётся автоматически). Схема поднимается через **Alembic** (`upgrade head`), как в production.
 
 ### 7. Остановка и очистка
 
@@ -275,7 +275,10 @@ hitalent/
 
 ### `GET /health`
 
-Проверка, что сервис запущен.
+Проверка, что сервис запущен и PostgreSQL доступен.
+
+**Ответ при успехе:** `200` — `{"status": "ok", "database": "ok"}`  
+**Ответ при недоступной БД:** `503` — `{"status": "error", "database": "unavailable"}`
 
 ---
 

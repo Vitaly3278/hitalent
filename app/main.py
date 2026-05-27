@@ -1,10 +1,13 @@
 import logging
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 from app.api.routes import api_router
+from app.database import get_db
 from app.exceptions import AppError
 from app.logging_config import setup_logging
 
@@ -46,6 +49,14 @@ def root() -> dict:
     }
 
 
-@app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+@app.get("/health", response_model=None)
+def health(db: Session = Depends(get_db)) -> dict[str, str] | JSONResponse:
+    try:
+        db.execute(text("SELECT 1"))
+        return {"status": "ok", "database": "ok"}
+    except Exception:
+        logger.exception("Проверка подключения к БД не прошла")
+        return JSONResponse(
+            status_code=503,
+            content={"status": "error", "database": "unavailable"},
+        )

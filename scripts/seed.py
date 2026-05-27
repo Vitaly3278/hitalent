@@ -4,16 +4,24 @@
 import argparse
 from datetime import date
 
-from sqlalchemy import text
+from sqlalchemy import func, select, text
 
 from app.database import SessionLocal
 from app.models import Department, Employee
 
 
+def _count_departments(db) -> int:
+    return db.scalar(select(func.count()).select_from(Department)) or 0
+
+
+def _count_employees(db) -> int:
+    return db.scalar(select(func.count()).select_from(Employee)) or 0
+
+
 def seed_database(*, force: bool = False) -> None:
     db = SessionLocal()
     try:
-        existing = db.query(Department).count()
+        existing = _count_departments(db)
         if existing > 0 and not force:
             print(
                 f"В БД уже есть {existing} подразделений. "
@@ -95,8 +103,8 @@ def seed_database(*, force: bool = False) -> None:
         db.commit()
 
         print("Тестовые данные добавлены:")
-        print(f"  Подразделений: {db.query(Department).count()}")
-        print(f"  Сотрудников:   {db.query(Employee).count()}")
+        print(f"  Подразделений: {_count_departments(db)}")
+        print(f"  Сотрудников:   {_count_employees(db)}")
         print()
         print("Примеры запросов:")
         print(f"  GET http://localhost:8000/departments/{company.id}?depth=3")

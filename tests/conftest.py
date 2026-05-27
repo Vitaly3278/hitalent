@@ -1,17 +1,21 @@
 import os
 from collections.abc import Generator
+from pathlib import Path
 
 import pytest
+from alembic import command
+from alembic.config import Config
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.database import Base, get_db
-from app.main import app
-
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_TEST_DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/hitalent_test"
 TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL", DEFAULT_TEST_DATABASE_URL)
+
+# Важно: задать до импорта app, чтобы Alembic и SQLAlchemy использовали test DB
+os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 
 
 def _ensure_postgres_database(database_url: str) -> None:
@@ -32,16 +36,30 @@ def _ensure_postgres_database(database_url: str) -> None:
 if TEST_DATABASE_URL.startswith("postgresql"):
     _ensure_postgres_database(TEST_DATABASE_URL)
 
+from app.database import Base, get_db  # noqa: E402
+from app.main import app  # noqa: E402
+
 engine = create_engine(TEST_DATABASE_URL, pool_pre_ping=True)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
+def _alembic_config() -> Config:
+    alembic_cfg = Config(str(PROJECT_ROOT / "alembic.ini"))
+    alembic_cfg.set_main_option("sqlalchemy.url", TEST_DATABASE_URL)
+    return alembic_cfg
+
+
+def _reset_schema() -> None:
+    alembic_cfg = _alembic_config()
+    command.downgrade(alembic_cfg, "base")
+    command.upgrade(alembic_cfg, "head")
+
+
 @pytest.fixture(scope="session", autouse=True)
 def setup_database() -> Generator[None, None, None]:
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
+    _reset_schema()
     yield
-    Base.metadata.drop_all(bind=engine)
+    _reset_schema()
 
 
 @pytest.fixture
